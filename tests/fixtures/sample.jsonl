@@ -1,0 +1,6 @@
+{"id":1,"role":"user","tags":["a","b"]}
+{"id":2,"role":"assistant","tags":["c"]}
+
+{"id":3,"role":"user"}
+{"id":4,"role":"assistant",}
+[1,2,3]
