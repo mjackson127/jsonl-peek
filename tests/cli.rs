@@ -24,6 +24,18 @@ fn run(args: &[&str]) -> Output {
     bin().args(args).output().expect("failed to run binary")
 }
 
+fn run_with_stdin(args: &[&str], input: &[u8]) -> Output {
+    let mut child = bin()
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn binary");
+    child.stdin.take().unwrap().write_all(input).unwrap();
+    child.wait_with_output().expect("failed to wait on child")
+}
+
 fn stdout(output: &Output) -> String {
     String::from_utf8(output.stdout.clone()).expect("stdout must be UTF-8")
 }
@@ -138,6 +150,58 @@ fn schema_json_report_matches_the_fixture() {
     let report = parse(&stdout(&output)).expect("schema --json must emit valid JSON");
     assert_eq!(report.get("records").and_then(Value::as_i64), Some(4));
     assert!(report.get("paths").and_then(|p| p.get("id")).is_some());
+}
+
+#[test]
+fn schema_depth_option_limits_how_far_it_descends() {
+    let output = run_with_stdin(&["schema", "--depth", "2"], b"{\"a\":{\"b\":{\"c\":1}}}\n");
+    assert!(output.status.success());
+    let report = stdout(&output);
+    assert!(report.contains("a.b"));
+    assert!(!report.contains("a.b.c"));
+}
+
+#[test]
+fn schema_min_rate_option_hides_rare_paths() {
+    let input = b"{\"common\":1}\n{\"common\":2,\"rare\":3}\n";
+    let output = run_with_stdin(&["schema", "--min-rate", "0.9"], input);
+    assert!(output.status.success());
+    let report = stdout(&output);
+    assert!(report.contains("common"));
+    assert!(!report.contains("rare"));
+}
+
+#[test]
+fn stats_max_errors_caps_shown_issues_but_not_the_total() {
+    let output = run_with_stdin(&["stats", "--max-errors", "2"], b"oops\noops\noops\noops\n");
+    assert!(output.status.success());
+    assert!(stdout(&output).contains("invalid lines (4 total, showing 2)"));
+}
+
+#[test]
+fn help_flag_prints_usage_and_exits_zero() {
+    for args in [&["-h"][..], &["--help"][..], &["head", "-h"][..], &["schema", "--help"][..]] {
+        let output = run(args);
+        assert!(output.status.success(), "{:?} should exit 0", args);
+        assert!(stdout(&output).contains("jsonl-peek head"));
+    }
+}
+
+#[test]
+fn unknown_option_is_a_usage_error_for_every_subcommand() {
+    for cmd in ["head", "sample", "stats", "schema"] {
+        let output = run(&[cmd, "--nope"]);
+        assert_eq!(output.status.code(), Some(2), "{} should reject an unknown option", cmd);
+        assert!(stderr(&output).contains("unknown option"));
+    }
+}
+
+#[test]
+fn extra_positional_argument_is_a_usage_error() {
+    let path = fixture("sample.jsonl");
+    let output = run(&["head", path.to_str().unwrap(), "extra"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("too many arguments"));
 }
 
 #[test]
