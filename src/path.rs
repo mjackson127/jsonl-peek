@@ -80,8 +80,11 @@ impl FieldPath {
                     if !expect_key {
                         return Err(PathError::MissingSeparator(i));
                     }
+                    // A closure pattern rather than a `[char; 2]` literal: the
+                    // latter only implements `Pattern` since Rust 1.71, one
+                    // minor version past the 1.70 floor this crate declares.
                     let end = source[i..]
-                        .find(['.', '['])
+                        .find(|c| c == '.' || c == '[')
                         .map(|off| i + off)
                         .unwrap_or(source.len());
                     segments.push(Segment::Key(source[i..end].to_string()));
