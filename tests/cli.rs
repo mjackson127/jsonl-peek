@@ -226,6 +226,39 @@ fn missing_option_value_is_a_usage_error() {
 }
 
 #[test]
+fn non_numeric_option_value_is_a_usage_error() {
+    let output = run(&["head", "-n", "abc"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("-n expects a number, got 'abc'"));
+}
+
+#[test]
+fn malformed_field_path_is_a_usage_error() {
+    let output = run(&["stats", "--field", "a..b"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr(&output).contains("invalid field path 'a..b'"));
+}
+
+#[test]
+fn stats_top_option_limits_listed_distinct_values() {
+    let path = fixture("sample.jsonl");
+    let output = run(&["stats", "--field", "tags[]", "--top", "1", path.to_str().unwrap()]);
+    assert!(output.status.success());
+    let report = stdout(&output);
+    // The distribution still reports all 3 distinct values, but only the
+    // requested number of rows is printed.
+    assert!(report.contains("3 distinct values"));
+    let value_rows = report
+        .lines()
+        .filter(|l| {
+            let trimmed = l.trim_start();
+            trimmed.starts_with(|c: char| c.is_ascii_digit()) && trimmed.contains('%')
+        })
+        .count();
+    assert_eq!(value_rows, 1);
+}
+
+#[test]
 fn reads_from_stdin_when_no_file_is_given() {
     let mut child = bin()
         .arg("head")
