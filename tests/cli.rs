@@ -233,6 +233,15 @@ fn non_numeric_option_value_is_a_usage_error() {
 }
 
 #[test]
+fn min_rate_outside_zero_to_one_is_a_usage_error() {
+    for bad in ["1.5", "-0.1", "nan", "inf"] {
+        let output = run_with_stdin(&["schema", "--min-rate", bad], b"{}\n");
+        assert_eq!(output.status.code(), Some(2), "value {}", bad);
+        assert!(stderr(&output).contains("--min-rate expects a value between 0 and 1"));
+    }
+}
+
+#[test]
 fn malformed_field_path_is_a_usage_error() {
     let output = run(&["stats", "--field", "a..b"]);
     assert_eq!(output.status.code(), Some(2));

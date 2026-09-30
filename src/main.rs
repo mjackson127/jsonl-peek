@@ -314,7 +314,15 @@ fn cmd_schema(args: &[String]) -> i32 {
                     return usage_error("--min-rate requires a value");
                 };
                 match parse_num::<f64>(value, "--min-rate") {
-                    Ok(v) => min_rate = v,
+                    // f64 parsing accepts "nan" and "inf"; a NaN threshold would
+                    // make every comparison false and silently hide nothing.
+                    Ok(v) if (0.0..=1.0).contains(&v) => min_rate = v,
+                    Ok(_) => {
+                        return usage_error(&format!(
+                            "--min-rate expects a value between 0 and 1, got '{}'",
+                            value
+                        ))
+                    }
                     Err(msg) => return usage_error(&msg),
                 }
             }
